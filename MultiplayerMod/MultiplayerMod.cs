@@ -286,6 +286,9 @@ public class NetworkManager : MonoBehaviour
     private string ipInput = "127.0.0.1";
     private string portInput = "17777";
     private string statusText = "Press F2 for network menu";
+    public const string ModVersion = "1.1.0";
+    private static string latestVersion;
+    private static bool versionChecked;
 
     public static float localShadowMove;
     public static bool localShadowJump;
@@ -397,6 +400,14 @@ public class NetworkManager : MonoBehaviour
         var go = new GameObject("NetworkManager");
         instance = go.AddComponent<NetworkManager>();
         DontDestroyOnLoad(go);
+        CheckForUpdate();
+    }
+
+    private static void CheckForUpdate()
+    {
+        if (versionChecked) return;
+        versionChecked = true;
+        try { new System.Threading.Thread(() => { try { using (var wc = new System.Net.WebClient()) { wc.Headers.Add("User-Agent", "AscendumMP/" + ModVersion); string json = wc.DownloadString("https://api.github.com/repos/chuzouX/AscendumMP/releases/latest"); int t = json.IndexOf("\"tag_name\":\""); if (t > 0) { int s = t + 12; int e = json.IndexOf("\"", s); if (e > s) { string tag = json.Substring(s, e - s); if (tag.StartsWith("v")) tag = tag.Substring(1); latestVersion = tag; } } } } catch { } }) { IsBackground = true }.Start(); } catch { }
     }
 
     private void Awake()
@@ -697,9 +708,8 @@ public class NetworkManager : MonoBehaviour
 
         // Title
         GUI.color = bright;
-        GUI.Label(new Rect(x, y, w, 20), "◆ Ascendum 联机");
-        GUI.color = dim;
-        GUI.Label(new Rect(x + 120, y, 240, 20), "Build " + BuildInfo.CompiledAt);
+        GUI.Label(new Rect(x, y, w - 80, 20), "◆ Ascendum 联机  v" + ModVersion);
+        if (latestVersion != null && latestVersion != ModVersion) { GUI.color = yellow; GUI.Label(new Rect(x + 180, y, 160, 20), "v" + latestVersion + " 可用!"); }
         y += 18;
 
         // Status
