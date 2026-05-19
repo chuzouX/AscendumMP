@@ -1,0 +1,105 @@
+        // ── Dark panel ──
+        Color oldBg = GUI.backgroundColor;
+        GUI.backgroundColor = new Color(0.08f, 0.08f, 0.12f, 0.92f);
+        GUI.Box(new Rect(8, 8, 384, 290), "");
+        GUI.backgroundColor = oldBg;
+
+        int x = 18, w = 360, y = 14;
+        Color dim = new Color(0.55f, 0.55f, 0.6f);
+        Color bright = new Color(0.9f, 0.9f, 0.95f);
+        Color green = new Color(0.3f, 0.85f, 0.4f);
+        Color yellow = new Color(1f, 0.85f, 0.2f);
+        Color blue = new Color(0.3f, 0.6f, 1f);
+        string role = isNetworkActive ? (isHost ? "房主" : "客户端") : "待机";
+
+        // Title
+        GUI.color = bright;
+        GUI.Label(new Rect(x, y, w, 20), "◆ Ascendum 联机");
+        GUI.color = dim;
+        GUI.Label(new Rect(x + 120, y, 240, 20), "Build " + BuildInfo.CompiledAt);
+        y += 18;
+
+        // Status
+        GUI.color = isNetworkActive ? (isHost ? green : blue) : dim;
+        GUI.Label(new Rect(x, y, 16, 20), "●");
+        GUI.color = bright;
+        GUI.Label(new Rect(x + 18, y, w - 18, 20), role + (isNetworkActive ? "" : " (F3/F4 开始)"));
+        y += 20;
+
+        GUI.color = new Color(0.25f, 0.25f, 0.35f);
+        GUI.Label(new Rect(x, y, w, 12), "──────────────────────────────────────");
+        y += 10;
+
+        if (isNetworkActive)
+        {
+            GUI.color = dim; GUI.Label(new Rect(x, y, 60, 18), "端口");
+            GUI.color = bright; GUI.Label(new Rect(x + 60, y, w - 60, 18), port.ToString());
+            y += 16;
+            if (!isHost) {
+                GUI.color = dim; GUI.Label(new Rect(x, y, 60, 18), "连接至");
+                GUI.color = bright; GUI.Label(new Rect(x + 60, y, w - 60, 18), ipInput + ":" + port);
+                y += 16;
+            }
+            y += 4;
+            GUI.color = new Color(0.25f, 0.25f, 0.35f);
+            GUI.Label(new Rect(x, y, w, 12), "──────────────────────────────────────");
+            y += 12;
+
+            int myScene = SceneManager.GetActiveScene().buildIndex;
+            string myName = SceneManager.GetActiveScene().name ?? "";
+            GUI.color = dim; GUI.Label(new Rect(x, y, w, 16), "场景同步");
+            y += 16;
+            GUI.color = green; GUI.Label(new Rect(x, y, 16, 18), "H");
+            GUI.color = bright; GUI.Label(new Rect(x + 16, y, w - 16, 18), isHost ? (myName + " [" + myScene + "]") : ("[" + lastStateSync.sceneIndex + "]"));
+            y += 16;
+            GUI.color = blue; GUI.Label(new Rect(x, y, 16, 18), "S");
+            GUI.color = bright; GUI.Label(new Rect(x + 16, y, w - 16, 18), isHost ? ("[" + lastStateSync.sceneIndex + "]") : (myName + " [" + myScene + "]"));
+            y += 16;
+
+            GUI.color = dim; GUI.Label(new Rect(x, y, w, 16), "同步 " + (bothReady ? "✓" : "…"));
+            y += 16;
+            GUI.color = bright;
+            GUI.Label(new Rect(x, y, 170, 18), "状态包 " + debugStatePackets);
+            GUI.Label(new Rect(x + 170, y, 170, 18), "输入包 " + debugInputPackets);
+            y += 16;
+            GUI.Label(new Rect(x, y, w, 18), "射击序列  H:" + (isHost ? holyShootSeq : lastStateSync.holyShootSeq) + "  S:" + (isHost ? shadowShootSeq : lastStateSync.shadowShootSeq));
+            y += 18;
+
+            GUI.color = new Color(0.25f, 0.25f, 0.35f);
+            GUI.Label(new Rect(x, y, w, 12), "──────────────────────────────────────");
+            y += 12;
+
+            if (isHost && localIsInviting) {
+                GUI.color = yellow;
+                GUI.Label(new Rect(x, y, w, 18), "▶ 邀请中: " + (pendingSceneName ?? ""));
+                y += 18;
+                GUI.color = Color.white;
+                if (GUI.Button(new Rect(x, y, 100, 22), "取消 (F6)")) { localIsInviting = false; statusText = "Cancelled."; }
+            } else if (!isHost && lastStateSync.isInviting) {
+                GUI.color = yellow;
+                GUI.Label(new Rect(x, y, w, 18), "▶ 收到邀请!");
+                y += 18;
+                GUI.color = Color.white;
+                if (localClientAgreed) GUI.Label(new Rect(x, y, w, 18), "  等待主机确认…");
+                else if (GUI.Button(new Rect(x, y, 100, 22), "同意 (F6)")) { localClientAgreed = true; statusText = "Agreed!"; }
+            } else {
+                GUI.backgroundColor = new Color(0.7f, 0.2f, 0.2f);
+                if (GUI.Button(new Rect(x, y, 140, 26), "断开连接 (F5)")) Disconnect();
+                GUI.backgroundColor = Color.white;
+            }
+        }
+        else
+        {
+            GUI.color = bright;
+            if (GUI.Button(new Rect(x, y, w - 4, 30), "◆ 创建房间 (F3)")) StartHost();
+            y += 36;
+            GUI.color = dim; GUI.Label(new Rect(x, y, 50, 20), "对方IP");
+            GUI.color = Color.white;
+            GUI.backgroundColor = new Color(0.15f, 0.15f, 0.2f);
+            ipInput = GUI.TextField(new Rect(x + 52, y, 120, 20), ipInput);
+            GUI.backgroundColor = Color.white;
+            y += 26;
+            GUI.color = bright;
+            if (GUI.Button(new Rect(x, y, w - 4, 30), "◆ 加入房间 (F4)")) StartClient(ipInput);
+        }
+        GUI.color = Color.white;

@@ -1,0 +1,8 @@
+bin/
+obj/
+*.dll
+*.patched
+*.exe
+Backups/
+.vs/
+*.user
