@@ -116,6 +116,7 @@ public struct NetworkStateSync
     public bool levelCompleted;
     public bool levelReady;
     public bool isInviting;
+    public int sceneGeneration;
     public bool holyCarryingObject;
     public bool shadowCarryingObject;
     public string holyCarryObjectName;
@@ -138,6 +139,7 @@ public struct NetworkStateSync
         w.Write(levelCompleted);
         w.Write(levelReady);
         w.Write(isInviting);
+        w.Write(sceneGeneration);
         w.Write(holyCarryingObject);
         w.Write(shadowCarryingObject);
         w.Write(holyCarryObjectName ?? "");
@@ -170,6 +172,7 @@ public struct NetworkStateSync
               levelCompleted = r.ReadBoolean(),
               levelReady = r.ReadBoolean(),
               isInviting = r.ReadBoolean(),
+              sceneGeneration = r.ReadInt32(),
               holyCarryingObject = r.ReadBoolean(),
               shadowCarryingObject = r.ReadBoolean(),
               holyCarryObjectName = r.ReadString(),
@@ -329,6 +332,8 @@ public class NetworkManager : MonoBehaviour
     private int debugInputPackets;
     private int lastSceneIndex = -1;
     private int sceneStabilizeFrames;
+    private static int sceneGeneration;
+    private int lastReceivedSceneGeneration = -1;
 
     private static Type levelManagerType;
     private static FieldInfo levelManagerCurrentField;
@@ -427,9 +432,18 @@ public class NetworkManager : MonoBehaviour
                 return true;
             }
 
+            // Respawn: same-scene reload — allow immediately, increment generation for client sync.
+            if (sceneName == SceneManager.GetActiveScene().name)
+            {
+                localIsInviting = false;
+                sceneGeneration++;
+                return true;
+            }
+
             if (localIsInviting && pendingSceneName == sceneName && remoteInput.agreed)
             {
                 localIsInviting = false;
+                sceneGeneration++;
                 return true;
             }
 
@@ -611,7 +625,7 @@ public class NetworkManager : MonoBehaviour
             if (Time.frameCount % 120 == 0) Debug.Log("[NET] Host NOT in game scene. sceneName=" + sceneName + " isGameScene=" + isGameScene);
             // In menus, send a bare state packet (no player data) so client
             // sees scene changes and invitation flags.
-            pendingHostState = new NetworkStateSync { sceneIndex = SceneManager.GetActiveScene().buildIndex, targetScene = SceneManager.GetActiveScene().buildIndex, levelReady = bothReady, isInviting = localIsInviting };
+            pendingHostState = new NetworkStateSync { sceneIndex = SceneManager.GetActiveScene().buildIndex, targetScene = SceneManager.GetActiveScene().buildIndex, levelReady = bothReady, isInviting = localIsInviting, sceneGeneration = sceneGeneration };
             try { SendPacket(pendingHostState.Serialize(), 0x02); } catch { }
         } else {
             var reply = new NetworkStateSync { sceneIndex = SceneManager.GetActiveScene().buildIndex, targetScene = SceneManager.GetActiveScene().buildIndex, levelReady = true, isInviting = false };
@@ -818,6 +832,7 @@ public class NetworkManager : MonoBehaviour
         _hostLastJumpHold = false; _hostLastShootHold = false;
         lastSceneIndex = SceneManager.GetActiveScene().buildIndex;
         sceneStabilizeFrames = 0;
+        sceneGeneration = 0;
         try { if ((object)server != null) server.Stop(); } catch { }
         server = null; clientSocket = null; stream = null;
         try { server = new TcpListener(IPAddress.Any, port); server.Start(); }
@@ -861,6 +876,7 @@ public class NetworkManager : MonoBehaviour
         _hostLastJumpHold = false; _hostLastShootHold = false;
         lastSceneIndex = SceneManager.GetActiveScene().buildIndex;
         sceneStabilizeFrames = 0;
+        lastReceivedSceneGeneration = -1;
         connectSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         connectSocket.Blocking = false;
         try
@@ -918,7 +934,7 @@ public class NetworkManager : MonoBehaviour
     private NetworkStateSync pendingHostState;
     private void BuildHostState()
     {
-        pendingHostState = new NetworkStateSync { sceneIndex = SceneManager.GetActiveScene().buildIndex, targetScene = SceneManager.GetActiveScene().buildIndex, levelReady = bothReady, isInviting = localIsInviting };
+        pendingHostState = new NetworkStateSync { sceneIndex = SceneManager.GetActiveScene().buildIndex, targetScene = SceneManager.GetActiveScene().buildIndex, levelReady = bothReady, isInviting = localIsInviting, sceneGeneration = sceneGeneration };
         GameObject holy;
         GameObject shadow;
         if (TryGetPlayers(out holy, out shadow))
@@ -1007,9 +1023,11 @@ public class NetworkManager : MonoBehaviour
     {
         if (lastStateSync.isInviting) return;
         int sceneIdx = lastStateSync.targetScene;
-        if (sceneIdx != lastReceivedScene) {
+        bool sameSceneReload = (sceneIdx == lastReceivedScene && lastStateSync.sceneGeneration > lastReceivedSceneGeneration);
+        if (sceneIdx != lastReceivedScene || sameSceneReload) {
             lastReceivedScene = sceneIdx;
-              if (SceneManager.GetActiveScene().buildIndex != sceneIdx) {
+            lastReceivedSceneGeneration = lastStateSync.sceneGeneration;
+              if (SceneManager.GetActiveScene().buildIndex != sceneIdx || sameSceneReload) {
                   isActuallyLoading = true;
                   SceneManager.LoadScene(sceneIdx);
                   isActuallyLoading = false;
